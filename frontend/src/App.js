@@ -1,9 +1,10 @@
-// src/App.js
+// src/App.js - Updated with new routing
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AuthPage, ProfilePage } from './pages';
-import Dashboard from './components/Dashboard'; // Direct import from components
+import StatsDashboard from './components/StatsDashboard';
+import Dashboard from './components/Dashboard';
 import './index.css';
 
 // Protected Route Component
@@ -33,7 +34,7 @@ const PublicRoute = ({ children }) => {
     );
   }
 
-  return !isAuthenticated ? children : <Navigate to="/profile" replace />;
+  return !isAuthenticated ? children : <Navigate to="/stats" replace />;
 };
 
 const AppRoutes = () => {
@@ -68,8 +69,17 @@ const AppRoutes = () => {
         }
       />
 
+      <Route
+        path="/stats"
+        element={
+          <ProtectedRoute>
+            <StatsDashboard />
+          </ProtectedRoute>
+        }
+      />
+
       {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<Navigate to="/stats" replace />} />
       
       {/* Catch all - redirect to login */}
       <Route path="*" element={<Navigate to="/login" replace />} />

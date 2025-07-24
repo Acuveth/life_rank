@@ -1,8 +1,9 @@
+// src/pages/index.js - Updated ProfilePage
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LoginForm, RegisterForm } from '../components/LoginForm';
 import { UserProfile } from '../components/UserProfile';
-import Dashboard from '../components/Dashboard'; // Changed to default import
+import StatsDashboard from '../components/StatsDashboard';
 
 // Auth Page Component
 export const AuthPage = () => {
@@ -20,7 +21,7 @@ export const ProfilePage = () => {
   const navigate = useNavigate();
 
   const handleContinue = () => {
-    navigate('/dashboard');
+    navigate('/stats'); // Updated to go to stats dashboard
   };
 
   return (
@@ -50,4 +51,4 @@ export const ProfilePage = () => {
   );
 };
 
-export { Dashboard };
+export { StatsDashboard };

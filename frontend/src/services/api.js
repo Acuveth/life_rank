@@ -1,4 +1,4 @@
-// src/services/api.js
+// src/services/api.js - Updated with chat functionality
 import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -58,3 +58,17 @@ export const userAPI = {
     api.delete('/users/me').then(res => res.data),
 };
 
+// New Chat API functions
+export const chatAPI = {
+  sendMessage: (message) =>
+    api.post('/chat/send', { message }).then(res => res.data),
+  
+  getChatHistory: (limit = 50) =>
+    api.get(`/chat/history?limit=${limit}`).then(res => res.data),
+  
+  getUserStats: () =>
+    api.get('/chat/stats').then(res => res.data),
+  
+  updateUserStats: (stats) =>
+    api.post('/chat/stats/update', stats).then(res => res.data),
+};

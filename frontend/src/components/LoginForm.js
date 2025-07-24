@@ -46,6 +46,7 @@ const LoginForm = ({ onSwitchToRegister }) => {
   };
 
   const handleGoogleError = (error) => {
+
     console.error('Google login error:', error);
     setError('Google login failed. Please try again.');
   };
@@ -59,7 +60,7 @@ const LoginForm = ({ onSwitchToRegister }) => {
 
   // Check if Google Client ID is configured
   const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
-  const isGoogleConfigured = googleClientId && googleClientId !== 'your_google_client_id_here';
+  const isGoogleConfigured = !!googleClientId;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
