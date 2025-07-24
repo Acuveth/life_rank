@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
-from ..database import get_db
+from database import get_db
 from schemas import UserCreate, UserLogin, GoogleAuth, Token, UserResponse
 from services.auth_service import AuthService, ACCESS_TOKEN_EXPIRE_MINUTES
 from services.user_service import UserService

@@ -27,20 +27,27 @@ const LoginForm = ({ onSwitchToRegister }) => {
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
+    console.log('Google login success:', credentialResponse);
+    
     if (credentialResponse.credential) {
       try {
         setIsLoading(true);
+        setError('');
         await googleLogin(credentialResponse.credential);
       } catch (err) {
-        setError(err.message);
+        console.error('Google login error:', err);
+        setError(err.message || 'Google login failed');
       } finally {
         setIsLoading(false);
       }
+    } else {
+      setError('No credential received from Google');
     }
   };
 
-  const handleGoogleError = () => {
-    setError('Google login failed');
+  const handleGoogleError = (error) => {
+    console.error('Google login error:', error);
+    setError('Google login failed. Please try again.');
   };
 
   const handleChange = (e) => {
@@ -49,6 +56,10 @@ const LoginForm = ({ onSwitchToRegister }) => {
       [e.target.name]: e.target.value
     }));
   };
+
+  // Check if Google Client ID is configured
+  const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+  const isGoogleConfigured = googleClientId && googleClientId !== 'your_google_client_id_here';
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -72,6 +83,14 @@ const LoginForm = ({ onSwitchToRegister }) => {
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
               {error}
+            </div>
+          )}
+
+          {!isGoogleConfigured && (
+            <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-md">
+              <p className="text-sm">
+                Google Sign-In is not configured. Please set up your Google OAuth credentials.
+              </p>
             </div>
           )}
 
@@ -125,35 +144,38 @@ const LoginForm = ({ onSwitchToRegister }) => {
             </div>
           </form>
 
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or continue with</span>
-              </div>
-            </div>
-
+          {isGoogleConfigured && (
             <div className="mt-6">
-              <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID || ''}>
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={handleGoogleError}
-                  theme="outline"
-                  size="large"
-                  width="100%"
-                />
-              </GoogleOAuthProvider>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">Or continue with</span>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <GoogleOAuthProvider clientId={googleClientId}>
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    theme="outline"
+                    size="large"
+                    width="384"
+                    disabled={isLoading}
+                  />
+                </GoogleOAuthProvider>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-// src/components/RegisterForm.js
+// Register Form Component (also updated for consistency)
 const RegisterForm = ({ onSwitchToLogin }) => {
   const { register, googleLogin } = useAuth();
   const [formData, setFormData] = useState({
@@ -203,20 +225,27 @@ const RegisterForm = ({ onSwitchToLogin }) => {
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
+    console.log('Google registration success:', credentialResponse);
+    
     if (credentialResponse.credential) {
       try {
         setIsLoading(true);
+        setError('');
         await googleLogin(credentialResponse.credential);
       } catch (err) {
-        setError(err.message);
+        console.error('Google registration error:', err);
+        setError(err.message || 'Google registration failed');
       } finally {
         setIsLoading(false);
       }
+    } else {
+      setError('No credential received from Google');
     }
   };
 
-  const handleGoogleError = () => {
-    setError('Google registration failed');
+  const handleGoogleError = (error) => {
+    console.error('Google registration error:', error);
+    setError('Google registration failed. Please try again.');
   };
 
   const handleChange = (e) => {
@@ -225,6 +254,10 @@ const RegisterForm = ({ onSwitchToLogin }) => {
       [e.target.name]: e.target.value
     }));
   };
+
+  // Check if Google Client ID is configured
+  const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+  const isGoogleConfigured = googleClientId && googleClientId !== 'your_google_client_id_here';
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -248,6 +281,14 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
               {error}
+            </div>
+          )}
+
+          {!isGoogleConfigured && (
+            <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-md">
+              <p className="text-sm">
+                Google Sign-In is not configured. Please set up your Google OAuth credentials.
+              </p>
             </div>
           )}
 
@@ -378,28 +419,31 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             </div>
           </form>
 
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or continue with</span>
-              </div>
-            </div>
-
+          {isGoogleConfigured && (
             <div className="mt-6">
-              <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID || ''}>
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={handleGoogleError}
-                  theme="outline"
-                  size="large"
-                  width="100%"
-                />
-              </GoogleOAuthProvider>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">Or continue with</span>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <GoogleOAuthProvider clientId={googleClientId}>
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    theme="outline"
+                    size="large"
+                    width="384"
+                    disabled={isLoading}
+                  />
+                </GoogleOAuthProvider>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
