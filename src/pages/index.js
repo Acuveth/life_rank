@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LoginForm, RegisterForm } from '../components/LoginForm';
 import { UserProfile } from '../components/UserProfile';
-import { Dashboard } from '../components/Dashboard';
+import Dashboard from '../components/Dashboard'; // Changed to default import
 
 // Auth Page Component
 export const AuthPage = () => {

@@ -2,7 +2,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { AuthPage, ProfilePage, Dashboard } from './pages';
+import { AuthPage, ProfilePage } from './pages';
+import Dashboard from './components/Dashboard'; // Direct import from components
 import './index.css';
 
 // Protected Route Component
