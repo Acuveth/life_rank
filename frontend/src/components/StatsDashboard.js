@@ -1,4 +1,4 @@
-// src/components/StatsDashboard.js
+// src/components/StatsDashboard.js - Updated with sidebar layout
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -120,7 +120,7 @@ const StatsDashboard = () => {
       </div>
 
       {/* Category Scores */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {Object.entries(stats.categories).map(([category, data]) => (
           <div key={category} className="bg-white p-4 rounded-lg shadow border">
             <div className="flex items-center justify-between mb-2">
@@ -161,11 +161,29 @@ const StatsDashboard = () => {
           ))}
         </div>
       </div>
+
+      {/* Weekly Progress Chart */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold mb-4">Weekly Progress</h3>
+        <div className="flex items-end space-x-2 h-32">
+          {stats.weeklyProgress.map((score, index) => (
+            <div key={index} className="flex-1 flex flex-col items-center">
+              <div 
+                className="w-full bg-blue-500 rounded-t transition-all duration-300"
+                style={{ height: `${(score / 10) * 100}%` }}
+              ></div>
+              <span className="text-xs text-gray-600 mt-1">
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][index]}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 
   const renderChat = () => (
-    <div className="bg-white rounded-lg shadow h-96 flex flex-col">
+    <div className="bg-white rounded-lg shadow h-full flex flex-col">
       {/* Chat Header */}
       <div className="border-b p-4">
         <h3 className="font-semibold flex items-center">
@@ -214,12 +232,12 @@ const StatsDashboard = () => {
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="Ask about your stats, goals, or get advice..."
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           />
           <button
             onClick={handleSendMessage}
             disabled={!newMessage.trim() || isTyping}
-            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 text-sm"
           >
             Send
           </button>
@@ -239,9 +257,24 @@ const StatsDashboard = () => {
     </div>
   );
 
+  const sidebarTabs = [
+    {
+      id: 'overview',
+      name: 'Overview',
+      icon: '📊',
+      component: renderOverview
+    },
+    {
+      id: 'chat',
+      name: 'AI Coach',
+      icon: '💬',
+      component: renderChat
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
+      {/* Top Navigation */}
       <nav className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
@@ -272,48 +305,38 @@ const StatsDashboard = () => {
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          {/* Tab Navigation */}
-          <div className="border-b border-gray-200 mb-6">
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'overview'
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                📊 Overview
-              </button>
-              <button
-                onClick={() => setActiveTab('chat')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'chat'
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                💬 AI Coach
-              </button>
+      {/* Main Layout with Sidebar */}
+      <div className="flex h-screen">
+        {/* Sidebar */}
+        <div className="w-64 bg-white shadow-lg border-r border-gray-200">
+          <div className="p-4">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">Dashboard</h2>
+            <nav className="space-y-2">
+              {sidebarTabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center px-4 py-3 text-left rounded-lg transition-colors duration-200 ${
+                    activeTab === tab.id
+                      ? 'bg-indigo-100 text-indigo-700 border-l-4 border-indigo-500'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  <span className="text-lg mr-3">{tab.icon}</span>
+                  <span className="font-medium">{tab.name}</span>
+                </button>
+              ))}
             </nav>
           </div>
+        </div>
 
-          {/* Tab Content */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              {activeTab === 'overview' && renderOverview()}
-              {activeTab === 'chat' && (
-                <div className="space-y-6">
-                  {renderOverview()}
-                </div>
-              )}
-            </div>
-            
-            {/* Right Sidebar - Always show chat */}
-            <div className="lg:col-span-1">
-              {renderChat()}
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full p-6">
+            <div className="h-full bg-gray-50 rounded-lg overflow-y-auto">
+              <div className="p-6">
+                {sidebarTabs.find(tab => tab.id === activeTab)?.component()}
+              </div>
             </div>
           </div>
         </div>
