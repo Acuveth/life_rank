@@ -1,8 +1,12 @@
-# backend/main.py - Updated with chat endpoints
+# backend/main.py - Updated with chat endpoints and env loading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from database import engine, Base
 from endpoints import auth, users, chat  # Added chat import

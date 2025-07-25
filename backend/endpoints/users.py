@@ -9,6 +9,7 @@ from services.user_service import UserService
 from endpoints.auth import get_current_user
 from models import User
 
+
 router = APIRouter()
 
 @router.get("/me", response_model=UserResponse)
