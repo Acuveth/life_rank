@@ -1,19 +1,19 @@
-# File: main.py
+# backend/main.py - Updated with chat endpoints
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 
 from database import engine, Base
-from endpoints import auth, users
+from endpoints import auth, users, chat  # Added chat import
 
 # Create tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Life Rank API",
-    description="Personal life scoring platform - Basic Auth & User Management",
-    version="1.0.0"
+    description="Personal life scoring platform with AI Coach",
+    version="2.0.0"
 )
 
 # CORS middleware
@@ -28,14 +28,15 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
+app.include_router(chat.router, prefix="/chat", tags=["AI Chat"])  # New chat router
 
 @app.get("/")
 async def root():
-    return {"message": "Life Rank API - Basic Version", "version": "1.0.0"}
+    return {"message": "Life Rank API with AI Coach", "version": "2.0.0"}
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "features": ["auth", "users", "ai_chat"]}
 
 if __name__ == "__main__":
     uvicorn.run(
