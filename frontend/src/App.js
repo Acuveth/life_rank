@@ -1,4 +1,4 @@
-// src/App.js - Updated with new routing
+// src/App.js - Updated with improved loading states and routing
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -7,40 +7,78 @@ import StatsDashboard from './components/StatsDashboard';
 import Dashboard from './components/Dashboard';
 import './index.css';
 
-// Protected Route Component
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+// Loading Component
+const LoadingScreen = ({ message = "Loading..." }) => (
+  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600 mx-auto"></div>
+      <p className="mt-4 text-lg text-gray-600">{message}</p>
+      <p className="mt-2 text-sm text-gray-400">Please wait while we verify your session...</p>
+    </div>
+  </div>
+);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
-      </div>
-    );
+// Protected Route Component - Only redirects after auth check is complete
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, isLoading, isInitialized } = useAuth();
+
+  // Show loading while auth is being checked
+  if (isLoading || !isInitialized) {
+    return <LoadingScreen message="Verifying your session..." />;
   }
 
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  // Only redirect after we're sure user is not authenticated
+  if (!isAuthenticated) {
+    console.log('User not authenticated, redirecting to login');
+    return <Navigate to="/login" replace />;
+  }
+
+  console.log('User authenticated, rendering protected content');
+  return children;
 };
 
-// Public Route Component (redirect if already authenticated)
+// Public Route Component - Only redirects after auth check is complete
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isInitialized } = useAuth();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
-      </div>
-    );
+  // Show loading while auth is being checked
+  if (isLoading || !isInitialized) {
+    return <LoadingScreen message="Checking your session..." />;
   }
 
-  return !isAuthenticated ? children : <Navigate to="/stats" replace />;
+  // Only redirect if user is actually authenticated
+  if (isAuthenticated) {
+    console.log('User already authenticated, redirecting to dashboard');
+    return <Navigate to="/stats" replace />;
+  }
+
+  console.log('User not authenticated, showing public route');
+  return children;
+};
+
+// Route component that handles initial redirect logic
+const InitialRoute = () => {
+  const { isAuthenticated, isLoading, isInitialized } = useAuth();
+
+  if (isLoading || !isInitialized) {
+    return <LoadingScreen message="Starting application..." />;
+  }
+
+  // Redirect based on auth status
+  if (isAuthenticated) {
+    return <Navigate to="/stats" replace />;
+  } else {
+    return <Navigate to="/login" replace />;
+  }
 };
 
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* Public Routes */}
+      {/* Initial route - redirects based on auth status */}
+      <Route path="/" element={<InitialRoute />} />
+
+      {/* Public Routes - accessible only when not authenticated */}
       <Route
         path="/login"
         element={
@@ -50,7 +88,7 @@ const AppRoutes = () => {
         }
       />
 
-      {/* Protected Routes */}
+      {/* Protected Routes - require authentication */}
       <Route
         path="/profile"
         element={
@@ -78,24 +116,60 @@ const AppRoutes = () => {
         }
       />
 
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/stats" replace />} />
-      
-      {/* Catch all - redirect to login */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      {/* Catch all - redirect to home which will handle auth redirect */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
 
+// Error Boundary for better error handling
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('App Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Something went wrong</h2>
+            <p className="text-gray-600 mb-4">Please refresh the page to try again.</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <div className="App">
-          <AppRoutes />
-        </div>
-      </AuthProvider>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <AuthProvider>
+          <div className="App">
+            <AppRoutes />
+          </div>
+        </AuthProvider>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

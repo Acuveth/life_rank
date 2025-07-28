@@ -1,4 +1,4 @@
-# File: services/auth_service.py - UPDATED
+# backend/services/auth_service.py - Simplified with minimal env dependency
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -10,10 +10,10 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 import json
 
-# Configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this")
+# Hardcoded configuration with sensible defaults
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 30  # Hardcoded - 30 minutes is good default
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -57,9 +57,9 @@ class AuthService:
     async def verify_google_token(token: str) -> Optional[dict]:
         """Verify Google JWT ID token and return user info"""
         try:
-            # Method 1: Using Google's official library (recommended)
+            # Method 1: Using Google's official library (if client ID is configured)
             google_client_id = os.getenv("GOOGLE_CLIENT_ID")
-            if google_client_id:
+            if google_client_id and google_client_id != "your_google_client_id_here":
                 try:
                     # Verify the token using Google's library
                     idinfo = id_token.verify_oauth2_token(
@@ -77,33 +77,26 @@ class AuthService:
                         "is_verified": idinfo.get("email_verified", False)
                     }
                 except ValueError as e:
-                    print(f"Google token verification failed with official library: {e}")
-                    # Fall back to manual verification
-                    pass
+                    print(f"Google token verification failed: {e}")
+                    return None
             
-            # Method 2: Manual JWT decoding (fallback)
+            # Method 2: Manual JWT decoding (fallback - less secure)
             try:
-                # Decode the JWT token without verification first to get the header
+                # Decode the JWT token without verification
                 unverified_payload = jwt.get_unverified_claims(token)
                 
                 # Basic validation
                 if unverified_payload.get("iss") not in ["accounts.google.com", "https://accounts.google.com"]:
-                    print("Invalid issuer")
-                    return None
-                
-                # Check if audience matches your client ID (if you have it)
-                google_client_id = os.getenv("GOOGLE_CLIENT_ID")
-                if google_client_id and unverified_payload.get("aud") != google_client_id:
-                    print("Invalid audience")
+                    print("Invalid Google token issuer")
                     return None
                 
                 # Check expiration
                 exp = unverified_payload.get("exp")
                 if exp and datetime.utcnow().timestamp() > exp:
-                    print("Token expired")
+                    print("Google token expired")
                     return None
                 
-                # If we get here, the token looks valid
+                # Return user info (WARNING: Less secure without proper verification)
                 return {
                     "email": unverified_payload.get("email"),
                     "full_name": unverified_payload.get("name"),
