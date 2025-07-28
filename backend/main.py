@@ -12,7 +12,7 @@ load_dotenv()
 
 from database import engine, Base
 from endpoints import auth, users, chat
-from mcp.client import initialize_mcp, shutdown_mcp
+from liferank_mcp.client import initialize_mcp, shutdown_mcp
 
 # Configure logging
 logging.basicConfig(

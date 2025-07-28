@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from typing import List
 import logging
 from datetime import datetime
-
+from liferank_mcp.client import mcp_client
 from database import get_db
 from schemas import ChatMessage, ChatResponse, UserStats, Goal, GoalCreate, GoalUpdate
 from services.chat_service import ChatService
@@ -226,7 +226,6 @@ async def get_coaching_suggestions(
 async def list_mcp_tools(current_user: User = Depends(get_current_user)):
     """List available MCP tools (for debugging/admin purposes)"""
     try:
-        from mcp.client import mcp_client
         
         if not mcp_client.session:
             return {"error": "MCP client not connected", "tools": []}

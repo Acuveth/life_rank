@@ -8,7 +8,7 @@ import logging
 
 from models import User, ChatHistory, UserLifeStats, UserGoals
 from schemas import UserStats, ChatResponse
-from mcp.client import mcp_client
+from liferank_mcp.client import mcp_client
 
 logger = logging.getLogger(__name__)
 
