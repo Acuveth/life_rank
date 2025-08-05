@@ -79,14 +79,6 @@ async def root():
         "features": ["auth", "users", "ai_chat", "mcp_integration"]
     }
 
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy", 
-        "features": ["auth", "users", "ai_chat", "mcp_integration"],
-        "ai_mode": "mcp_enhanced" if os.getenv("OPENAI_API_KEY") else "rule_based",
-        "database": "connected"
-    }
 
 @app.get("/mcp/status")
 async def mcp_status():
