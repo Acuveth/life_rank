@@ -1,4 +1,4 @@
-# backend/endpoints/chat.py - Updated with MCP integration
+# backend/endpoints/chat.py - Updated with separate tables and file reading
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
@@ -6,7 +6,10 @@ import logging
 from datetime import datetime
 from liferank_mcp.client import mcp_client
 from database import get_db
-from schemas import ChatMessage, ChatResponse, UserStats, Goal, GoalCreate, GoalUpdate
+from schemas import (
+    ChatMessage, ChatResponse, UserStats, Goal, GoalCreate, GoalUpdate,
+    ScoreUpdateCreate, ScoreUpdateResponse, UserLogCreate, UserLogResponse
+)
 from services.chat_service import ChatService
 from endpoints.auth import get_current_user
 from models import User
@@ -20,12 +23,12 @@ async def send_message(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Send a message to AI coach and get response using MCP integration"""
+    """Send a message to AI coach and get response using coach.txt file and user history"""
     try:
         # Get user's current stats for context
         user_stats = await ChatService.get_user_stats(db, current_user.id)
         
-        # Generate AI response using MCP-enhanced chat service
+        # Generate AI response using coach.txt and user history
         ai_response = await ChatService.generate_ai_response(
             message.message, 
             user_stats, 
@@ -49,6 +52,131 @@ async def send_message(
             detail=f"Chat service error: {str(e)}"
         )
 
+@router.post("/update-score", response_model=ScoreUpdateResponse)
+async def update_user_score(
+    score_data: ScoreUpdateCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user score and create score update record"""
+    try:
+        result = await ChatService.update_user_score(
+            db=db,
+            user_id=current_user.id,
+            category=score_data.category,
+            new_score=score_data.new_score
+        )
+        
+        # Get the created score update record
+        score_updates = await ChatService.get_score_updates(db, current_user.id, 1)
+        latest_update = score_updates[0] if score_updates else None
+        
+        if not latest_update:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to retrieve created score update"
+            )
+        
+        return ScoreUpdateResponse(
+            id=latest_update.id,
+            category=latest_update.category,
+            old_score=latest_update.old_score,
+            new_score=latest_update.new_score,
+            timestamp=latest_update.timestamp
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to update score: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update score: {str(e)}"
+        )
+
+# NEW: Log user activity description
+@router.post("/log-activity", response_model=UserLogResponse)
+async def log_user_activity(
+    log_data: UserLogCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Log user activity description"""
+    try:
+        log = await ChatService.log_user_description(
+            db=db,
+            user_id=current_user.id,
+            description=log_data.description
+        )
+        
+        return UserLogResponse(
+            id=log.id,
+            description=log.description,
+            timestamp=log.timestamp
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to log activity: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to log activity: {str(e)}"
+        )
+
+# NEW: Get user's activity logs
+@router.get("/logs", response_model=List[UserLogResponse])
+async def get_user_logs(
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get user's activity logs"""
+    try:
+        logs = await ChatService.get_user_logs(db, current_user.id, limit)
+        
+        return [
+            UserLogResponse(
+                id=log.id,
+                description=log.description,
+                timestamp=log.timestamp
+            )
+            for log in logs
+        ]
+        
+    except Exception as e:
+        logger.error(f"Failed to get user logs: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get user logs: {str(e)}"
+        )
+
+# NEW: Get user's score update history
+@router.get("/score-updates", response_model=List[ScoreUpdateResponse])
+async def get_score_updates(
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get user's score update history"""
+    try:
+        updates = await ChatService.get_score_updates(db, current_user.id, limit)
+        
+        return [
+            ScoreUpdateResponse(
+                id=update.id,
+                category=update.category,
+                old_score=update.old_score,
+                new_score=update.new_score,
+                timestamp=update.timestamp
+            )
+            for update in updates
+        ]
+        
+    except Exception as e:
+        logger.error(f"Failed to get score updates: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get score updates: {str(e)}"
+        )
+
+# Existing endpoints below (unchanged)
 @router.get("/history", response_model=List[ChatResponse])
 async def get_chat_history(
     limit: int = 50,
@@ -109,7 +237,6 @@ async def update_user_stats(
             detail=f"Failed to update stats: {str(e)}"
         )
 
-# New MCP-enhanced endpoints for goals management
 @router.post("/goals", response_model=Goal)
 async def create_goal(
     goal_data: GoalCreate,
@@ -151,7 +278,6 @@ async def update_goal(
 ):
     """Update a goal's progress or details"""
     try:
-        # For now, only support progress updates
         if goal_update.progress is not None:
             db_goal = await ChatService.update_goal_progress(
                 db=db,
@@ -195,8 +321,8 @@ async def get_coaching_suggestions(
         # Get user stats for context
         user_stats = await ChatService.get_user_stats(db, current_user.id)
         
-        # Generate suggestions using MCP
-        suggestions_message = "Based on my current stats and goals, what should I focus on this week?"
+        # Generate suggestions using coach.txt and user history
+        suggestions_message = "Based on my current stats and recent activities, what should I focus on this week?"
         suggestions = await ChatService.generate_ai_response(
             suggestions_message,
             user_stats,

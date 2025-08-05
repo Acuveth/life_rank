@@ -25,6 +25,8 @@ class User(Base):
     life_stats = relationship("UserLifeStats", back_populates="user", cascade="all, delete-orphan")
     chat_history = relationship("ChatHistory", back_populates="user", cascade="all, delete-orphan")
     goals = relationship("UserGoals", back_populates="user", cascade="all, delete-orphan")
+    score_updates = relationship("ScoreUpdate", back_populates="user", cascade="all, delete-orphan")  # NEW
+    logs = relationship("UserLog", back_populates="user", cascade="all, delete-orphan")  # NEW
 
 class UserLifeStats(Base):
     __tablename__ = "user_life_stats"
@@ -68,3 +70,25 @@ class UserGoals(Base):
     updated_at = Column(DateTime, onupdate=func.now())
     
     user = relationship("User", back_populates="goals")
+
+class ScoreUpdate(Base):
+    __tablename__ = "score_updates"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    category = Column(String(50), nullable=False)  # 'health', 'career', etc.
+    old_score = Column(Float, nullable=False)
+    new_score = Column(Float, nullable=False)
+    timestamp = Column(DateTime, server_default=func.now())
+    
+    user = relationship("User", back_populates="score_updates")
+
+class UserLog(Base):
+    __tablename__ = "user_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    description = Column(Text, nullable=False)  # What they did
+    timestamp = Column(DateTime, server_default=func.now())
+    
+    user = relationship("User", back_populates="logs")

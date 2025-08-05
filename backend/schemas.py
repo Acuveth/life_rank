@@ -1,4 +1,3 @@
-
 # File: schemas.py
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, List, Any
@@ -47,7 +46,6 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
 
-
 class ChatMessage(BaseModel):
     message: str
 
@@ -88,3 +86,29 @@ class GoalUpdate(BaseModel):
     progress: Optional[float] = None
     target_date: Optional[datetime] = None
     is_completed: Optional[bool] = None
+
+class ScoreUpdateCreate(BaseModel):
+    category: str  # 'health', 'career', etc.
+    new_score: float
+
+class ScoreUpdateResponse(BaseModel):
+    id: int
+    category: str
+    old_score: float
+    new_score: float
+    timestamp: datetime
+    
+    class Config:
+        from_attributes = True
+
+# NEW: User Log schemas (just description)
+class UserLogCreate(BaseModel):
+    description: str  # What they did
+
+class UserLogResponse(BaseModel):
+    id: int
+    description: str
+    timestamp: datetime
+    
+    class Config:
+        from_attributes = True

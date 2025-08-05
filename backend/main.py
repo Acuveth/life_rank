@@ -1,4 +1,4 @@
-# backend/main.py - Simplified with minimal environment dependency
+# backend/main.py - Updated with new table creation
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -27,9 +27,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Life Rank API with MCP integration...")
     
-    # Create database tables
+    # Create database tables (including new ScoreUpdate and UserLog tables)
     Base.metadata.create_all(bind=engine)
-    logger.info("Database tables created/verified")
+    logger.info("Database tables created/verified (including new score tracking and user log tables)")
     
     # Initialize MCP client
     mcp_success = await initialize_mcp()
@@ -76,14 +76,14 @@ async def root():
     return {
         "message": "Life Rank API with MCP-powered AI Coach", 
         "version": "2.1.0",
-        "features": ["auth", "users", "ai_chat", "mcp_integration"]
+        "features": ["auth", "users", "ai_chat", "mcp_integration", "score_tracking", "user_logs"]
     }
 
 
 @app.get("/mcp/status")
 async def mcp_status():
     """Check MCP integration status"""
-    from mcp.client import mcp_client
+    from liferank_mcp.client import mcp_client
     
     return {
         "mcp_connected": mcp_client.session is not None,

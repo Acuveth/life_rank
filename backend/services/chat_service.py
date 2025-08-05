@@ -1,12 +1,13 @@
-# backend/services/chat_service.py - Updated with MCP integration
+# backend/services/chat_service.py - Updated with file reading and separate tables
 import os
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import json
 import logging
+from pathlib import Path
 
-from models import User, ChatHistory, UserLifeStats, UserGoals
+from models import User, ChatHistory, UserLifeStats, UserGoals, ScoreUpdate, UserLog
 from schemas import UserStats, ChatResponse
 from liferank_mcp.client import mcp_client
 
@@ -15,97 +16,343 @@ logger = logging.getLogger(__name__)
 class ChatService:
     @staticmethod
     async def generate_ai_response(message: str, user_stats: Dict, user: User) -> str:
-        """Generate AI response using MCP integration"""
+        """Generate AI response using coach.txt file and ALL user logs/score updates"""
         try:
+            # Get coach knowledge from txt file
+            coach_knowledge = await ChatService._read_coach_file()
+            
+            # Get ALL user's logs and score updates (no limits)
+            user_logs = await ChatService._get_user_logs_context(user.id)
+            score_updates = await ChatService._get_score_updates_context(user.id)
+            
+            # Create enhanced context with ALL user history
+            enhanced_context = ChatService._create_enhanced_context(
+                user_stats, user, coach_knowledge, user_logs, score_updates
+            )
+            
             # Use MCP client to generate coaching response
             response = await mcp_client.generate_coaching_response(user.id, message)
             return response
             
         except Exception as e:
             logger.error(f"MCP AI Response Error: {e}")
-            # Fall back to rule-based response
-            return ChatService._generate_rule_based_response(message, user_stats, user)
+            # Fall back to rule-based response with ALL user history
+            return ChatService._generate_rule_based_response_with_knowledge(
+                message, user_stats, user, coach_knowledge, user_logs, score_updates
+            )
     
     @staticmethod
-    def _generate_rule_based_response(message: str, user_stats: Dict, user: User) -> str:
-        """Generate response using rule-based logic when MCP is not available"""
+    async def _read_coach_file() -> str:
+        """Read coach.txt file from backend directory"""
+        try:
+            coach_file_path = Path(__file__).parent.parent / "coach.txt"
+            
+            if coach_file_path.exists():
+                with open(coach_file_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            else:
+                logger.warning(f"Coach file not found at {coach_file_path}")
+                return "DEFAULT COACHING: Be supportive, encouraging, and provide specific actionable advice based on user's scores and recent activities."
+                
+        except Exception as e:
+            logger.error(f"Error reading coach file: {e}")
+            return "DEFAULT COACHING: Be supportive, encouraging, and provide specific actionable advice."
+    
+    @staticmethod
+    async def _get_user_logs_context(user_id: int) -> List[Dict]:
+        """Get ALL user logs for context (no limit)"""
+        try:
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                # Get ALL user logs (no limit)
+                logs = db.query(UserLog).filter(
+                    UserLog.user_id == user_id
+                ).order_by(UserLog.timestamp.desc()).all()
+                
+                return [
+                    {
+                        "description": log.description,
+                        "timestamp": log.timestamp.isoformat()
+                    }
+                    for log in logs
+                ]
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error getting user logs: {e}")
+            return []
+    
+    @staticmethod
+    async def _get_score_updates_context(user_id: int) -> List[Dict]:
+        """Get ALL user score updates for context (no limit)"""
+        try:
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                # Get ALL score updates (no limit)
+                updates = db.query(ScoreUpdate).filter(
+                    ScoreUpdate.user_id == user_id
+                ).order_by(ScoreUpdate.timestamp.desc()).all()
+                
+                return [
+                    {
+                        "category": update.category,
+                        "old_score": update.old_score,
+                        "new_score": update.new_score,
+                        "timestamp": update.timestamp.isoformat()
+                    }
+                    for update in updates
+                ]
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error getting score updates: {e}")
+            return []
+    
+    @staticmethod
+    def _create_enhanced_context(
+        user_stats: Dict, 
+        user: User, 
+        coach_knowledge: str, 
+        user_logs: List[Dict], 
+        score_updates: List[Dict]
+    ) -> str:
+        """Create enhanced context with knowledge, ALL logs, and ALL score updates"""
+        context = f"""
+COACH KNOWLEDGE BASE:
+{coach_knowledge}
+
+USER PROFILE:
+- Name: {user.full_name or user.email}
+- Current Overall Score: {user_stats.get('overall_score', 7.0)}/10
+
+CURRENT LIFE SCORES:
+"""
+        
+        categories = user_stats.get('categories', {})
+        for category, score in categories.items():
+            context += f"- {category.title()}: {score}/10\n"
+        
+        if score_updates:
+            context += f"\nALL SCORE IMPROVEMENTS HISTORY:\n"
+            for update in score_updates:  # ALL updates, no limit
+                context += f"- {update['timestamp'][:10]}: {update['category']} improved from {update['old_score']} to {update['new_score']}\n"
+        
+        if user_logs:
+            context += f"\nALL USER ACTIVITIES HISTORY:\n"
+            for log in user_logs:  # ALL logs, no limit
+                context += f"- {log['timestamp'][:10]}: {log['description']}\n"
+        
+        context += f"\nUse ALL this history to provide personalized, specific advice that references their past activities and improvements."
+        
+        return context
+    
+    @staticmethod
+    def _generate_rule_based_response_with_knowledge(
+        message: str, 
+        user_stats: Dict, 
+        user: User, 
+        coach_knowledge: str,
+        user_logs: List[Dict],
+        score_updates: List[Dict]
+    ) -> str:
+        """Generate response using rule-based logic with coach knowledge and ALL user history"""
         message_lower = message.lower()
         overall_score = user_stats.get('overall_score', 7.0)
         categories = user_stats.get('categories', {})
         
-        # Greeting responses
+        # Check recent improvements from ALL score updates
+        recent_improvements = score_updates[:3] if score_updates else []
+        recent_activities = user_logs[:5] if user_logs else []
+        
+        name = user.full_name or "there"
+        
+        # Greeting responses with recent progress
         if any(word in message_lower for word in ['hello', 'hi', 'hey', 'start']):
-            return (f"Hello {user.full_name or 'there'}! I'm your Life Rank AI coach. "
-                   f"Your current overall score is {overall_score}/10. "
-                   f"What would you like to work on today?")
+            response = f"Hello {name}! Your current Life Rank score is {overall_score}/10."
+            if recent_improvements:
+                latest = recent_improvements[0]
+                response += f" I see you recently improved your {latest['category']} from {latest['old_score']} to {latest['new_score']} - excellent progress!"
+            elif recent_activities:
+                response += f" I noticed you recently: {recent_activities[0]['description']} - great work!"
+            return response + " What would you like to work on today?"
         
-        # Health-related questions
-        elif any(word in message_lower for word in ['health', 'fitness', 'exercise', 'workout']):
-            health_score = categories.get('health', 7.0)
-            if health_score >= 8:
-                return (f"Your health score of {health_score}/10 is excellent! "
-                       f"To maintain this level, focus on consistency in your routine "
-                       f"and consider adding variety to prevent plateaus.")
-            elif health_score >= 6:
-                return (f"Your health score is {health_score}/10 - good progress! "
-                       f"Try increasing your exercise frequency or intensity, "
-                       f"and ensure you're getting quality sleep.")
+        # Progress and improvement responses
+        elif any(word in message_lower for word in ['progress', 'improvement', 'better', 'doing']):
+            if recent_improvements:
+                response = f"You've been making fantastic progress! Recent improvements:\n"
+                for imp in recent_improvements:
+                    response += f"• {imp['category'].title()}: {imp['old_score']} → {imp['new_score']}\n"
+                if recent_activities:
+                    response += f"\nYour recent activities:\n"
+                    for activity in recent_activities[:3]:
+                        response += f"• {activity['description']}\n"
+                response += f"\nYour overall score is now {overall_score}/10. Keep up the momentum!"
+                return response
             else:
-                return (f"Your health score of {health_score}/10 has room for improvement. "
-                       f"Start small: aim for 30 minutes of activity daily "
-                       f"and focus on building sustainable habits.")
+                return f"Your overall score is {overall_score}/10. Let's work on creating some positive momentum together! What area would you like to focus on?"
         
-        # Career-related questions
-        elif any(word in message_lower for word in ['career', 'work', 'job', 'professional']):
-            career_score = categories.get('career', 7.0)
-            momentum_text = 'Great momentum!' if career_score >= 7 else "Let's work on improving this."
-            return (f"Your career score is {career_score}/10. {momentum_text} "
-                   f"Consider networking, skill development, or seeking new challenges "
-                   f"to boost this area.")
+        # Use coach knowledge for specific advice
+        elif any(word in message_lower for word in ['advice', 'help', 'how', 'what should']):
+            # Find lowest scoring category for targeted advice
+            lowest_category = min(categories.items(), key=lambda x: x[1]) if categories else None
+            
+            response = f"Based on my coaching knowledge and your current situation:\n\n"
+            
+            if lowest_category and lowest_category[1] < 7:
+                cat_name, cat_score = lowest_category
+                response += f"Your {cat_name} score of {cat_score}/10 has the most room for growth. "
+                
+                # Extract relevant advice from coach knowledge
+                if 'HEALTH' in coach_knowledge and cat_name == 'health':
+                    response += "For health improvements, start with 10-15 minute daily activities and focus on sleep hygiene."
+                elif 'CAREER' in coach_knowledge and cat_name == 'career':
+                    response += "For career growth, dedicate 1-2 hours weekly to skill development and focus on quality networking."
+                elif 'RELATIONSHIPS' in coach_knowledge and cat_name == 'relationships':
+                    response += "For relationships, focus on quality time with device-free conversations and practice active listening."
+                elif 'FINANCES' in coach_knowledge and cat_name == 'finances':
+                    response += "For finances, start by tracking your expenses and building a small emergency fund."
+                else:
+                    response += "Start with small, consistent actions in this area."
+            
+            if recent_activities:
+                response += f"\n\nSince you've been working on: {recent_activities[0]['description']}, how has that been going?"
+            
+            return response
         
-        # Finance-related questions
-        elif any(word in message_lower for word in ['money', 'finance', 'financial', 'budget', 'save']):
-            finance_score = categories.get('finances', 7.0)
-            if finance_score >= 7:
-                return (f"Your finance score of {finance_score}/10 is solid! "
-                       f"Consider advanced strategies like investments "
-                       f"or optimizing your budget for long-term goals.")
-            else:
-                return (f"Your finance score of {finance_score}/10 suggests there's room to improve. "
-                       f"Start with budgeting basics and building an emergency fund.")
+        # Motivation requests
+        elif any(word in message_lower for word in ['motivated', 'motivation', 'encourage', 'stuck']):
+            response = f"I understand it can be challenging sometimes. Let me remind you of your strengths:\n\n"
+            
+            # Highlight their best areas
+            if categories:
+                best_category = max(categories.items(), key=lambda x: x[1])
+                response += f"Your {best_category[0]} score of {best_category[1]}/10 shows you have the capability for excellence!\n"
+            
+            if recent_improvements:
+                response += f"You've already proven you can improve - look at your recent {recent_improvements[0]['category']} progress!\n"
+            elif recent_activities:
+                response += f"You've been taking action: {recent_activities[0]['description']} - that shows commitment!\n"
+            
+            response += f"\nRemember: small, consistent steps lead to big changes. What's one tiny thing you could do today?"
+            return response
         
-        # Goals and progress
-        elif any(word in message_lower for word in ['goal', 'progress', 'achievement']):
-            goals = user_stats.get('goals', [])
-            if goals:
-                completed_goals = sum(1 for g in goals if g.get('progress', 0) >= 90)
-                return (f"You have {len(goals)} active goals, with {completed_goals} nearly complete! "
-                       f"Focus on the goals with lower progress to maintain momentum across all areas.")
-            else:
-                return ("Setting clear, measurable goals is key to improving your Life Rank score. "
-                       "What area would you like to set a goal for?")
+        # Default response with recent context
+        lowest_category = min(categories.items(), key=lambda x: x[1]) if categories else ("general wellness", 7.0)
+        response = f"I'm here to help you improve your Life Rank of {overall_score}/10!"
         
-        # Motivation and encouragement
-        elif any(word in message_lower for word in ['motivate', 'encourage', 'help', 'improve']):
-            if overall_score >= 8:
-                return (f"You're doing fantastic with a {overall_score}/10 score! "
-                       f"Focus on maintaining your strong areas while fine-tuning the rest.")
-            elif overall_score >= 6:
-                return (f"You're on the right track with {overall_score}/10. "
-                       f"Small, consistent improvements in your weakest areas will have a big impact!")
-            else:
-                return (f"Every journey starts with a single step. "
-                       f"Your {overall_score}/10 score shows potential for growth. "
-                       f"Let's focus on one area at a time!")
+        if recent_improvements:
+            response += f" You've been doing excellent work - I see your {recent_improvements[0]['category']} improved recently."
+        elif recent_activities:
+            response += f" I noticed you've been active: {recent_activities[0]['description']}."
         
-        # Default response
-        else:
-            lowest_category = min(categories.items(), key=lambda x: x[1]) if categories else ("general wellness", 7.0)
-            return (f"I'm here to help you improve your Life Rank! "
-                   f"Your overall score is {overall_score}/10, "
-                   f"with {lowest_category[0]} being an area for potential growth. "
-                   f"What specific aspect would you like to discuss?")
+        response += f" Your {lowest_category[0]} area has the most potential for growth. What specific aspect would you like to discuss?"
+        return response
     
+    @staticmethod
+    async def log_user_description(db: Session, user_id: int, description: str) -> UserLog:
+        """Log user activity description"""
+        try:
+            log = UserLog(
+                user_id=user_id,
+                description=description
+            )
+            db.add(log)
+            db.commit()
+            db.refresh(log)
+            return log
+        except Exception as e:
+            logger.error(f"Error logging user description: {e}")
+            db.rollback()
+            raise
+    
+    @staticmethod
+    async def update_user_score(
+        db: Session, 
+        user_id: int, 
+        category: str, 
+        new_score: float
+    ) -> Dict:
+        """Update user score and create score update record"""
+        try:
+            # Get current stats
+            stats = db.query(UserLifeStats).filter(
+                UserLifeStats.user_id == user_id
+            ).order_by(UserLifeStats.updated_at.desc()).first()
+            
+            if not stats:
+                stats = UserLifeStats(user_id=user_id)
+                db.add(stats)
+            
+            # Get old score
+            old_score = getattr(stats, f"{category}_score", 7.0)
+            
+            # Update score
+            setattr(stats, f"{category}_score", new_score)
+            
+            # Recalculate overall score
+            stats.overall_score = (
+                stats.health_score + stats.career_score + 
+                stats.relationship_score + stats.finance_score + 
+                stats.personal_score + stats.social_score
+            ) / 6
+            
+            db.commit()
+            db.refresh(stats)
+            
+            # Create score update record
+            score_update = ScoreUpdate(
+                user_id=user_id,
+                category=category,
+                old_score=old_score,
+                new_score=new_score
+            )
+            db.add(score_update)
+            db.commit()
+            db.refresh(score_update)
+            
+            return {
+                "category": category,
+                "old_score": old_score,
+                "new_score": new_score,
+                "overall_score": stats.overall_score
+            }
+            
+        except Exception as e:
+            logger.error(f"Error updating user score: {e}")
+            db.rollback()
+            raise
+    
+    @staticmethod
+    async def get_user_logs(db: Session, user_id: int, limit: int = 50) -> List[UserLog]:
+        """Get user's activity logs"""
+        try:
+            logs = db.query(UserLog).filter(
+                UserLog.user_id == user_id
+            ).order_by(UserLog.timestamp.desc()).limit(limit).all()
+            
+            return logs
+            
+        except Exception as e:
+            logger.error(f"Error getting user logs: {e}")
+            return []
+    
+    @staticmethod
+    async def get_score_updates(db: Session, user_id: int, limit: int = 50) -> List[ScoreUpdate]:
+        """Get user's score update history"""
+        try:
+            updates = db.query(ScoreUpdate).filter(
+                ScoreUpdate.user_id == user_id
+            ).order_by(ScoreUpdate.timestamp.desc()).limit(limit).all()
+            
+            return updates
+            
+        except Exception as e:
+            logger.error(f"Error getting score updates: {e}")
+            return []
+    
+    # Keep existing methods unchanged
     @staticmethod
     async def get_user_stats(db: Session, user_id: int) -> Dict:
         """Get user's life rank statistics from database"""
@@ -146,7 +393,7 @@ class ChatService:
                     "is_completed": goal.is_completed
                 })
             
-            # Calculate weekly progress (mock data for now - you can implement actual tracking)
+            # Calculate weekly progress (mock data for now)
             weekly_progress = [
                 stats.overall_score - 0.4,
                 stats.overall_score - 0.2,
@@ -173,7 +420,6 @@ class ChatService:
             
         except Exception as e:
             logger.error(f"Error getting user stats: {e}")
-            # Return default stats on error
             return {
                 "overall_score": 7.0,
                 "categories": {
@@ -216,7 +462,7 @@ class ChatService:
             ).order_by(ChatHistory.timestamp.desc()).limit(limit).all()
             
             chat_responses = []
-            for msg in reversed(messages):  # Reverse to get chronological order
+            for msg in reversed(messages):
                 chat_responses.append(ChatResponse(
                     message=msg.message,
                     sender=msg.sender,
@@ -229,11 +475,11 @@ class ChatService:
             logger.error(f"Error getting chat history: {e}")
             return []
     
+    # Keep other existing methods...
     @staticmethod
     async def update_user_stats(db: Session, user_id: int, stats: UserStats) -> Dict:
         """Update user's statistics"""
         try:
-            # Get or create user stats
             db_stats = db.query(UserLifeStats).filter(
                 UserLifeStats.user_id == user_id
             ).order_by(UserLifeStats.updated_at.desc()).first()
@@ -308,12 +554,21 @@ class ChatService:
             if not goal:
                 raise ValueError("Goal not found")
             
-            goal.progress = max(0.0, min(100.0, progress))  # Ensure progress is between 0-100
+            old_progress = goal.progress
+            goal.progress = max(0.0, min(100.0, progress))
             if goal.progress >= 100:
                 goal.is_completed = True
             
             db.commit()
             db.refresh(goal)
+            
+            # Log the goal progress as user activity
+            await ChatService.log_user_description(
+                db=db,
+                user_id=goal.user_id,
+                description=f"Updated progress on '{goal.title}' from {old_progress:.0f}% to {goal.progress:.0f}%"
+            )
+            
             return goal
         except Exception as e:
             logger.error(f"Error updating goal progress: {e}")
